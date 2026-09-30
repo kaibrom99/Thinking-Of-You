@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment / secrets
+.env
+*.env
+kai_token.txt
+sam_token
+*_token.txt
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Database
+*.db
+
+# IDE
+.idea/
+*.recording.jsonl.gz
+
+# OS
+.DS_Store
+Thumbs.db
