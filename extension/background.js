@@ -1,6 +1,6 @@
 // The background worker sends events to the server. Content scripts can't do this themselves
 // because the shopping site's cross-origin rules would block the request.
-const API = "http://localhost:8000";
+importScripts("config.js"); // defines API, the server address
 const log = (...a) => console.log("[Thinking of You]", ...a);
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {

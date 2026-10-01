@@ -3,11 +3,23 @@
 Run (with the backend already running):  streamlit run app.py
 """
 import html
+import os
 
 import requests
 import streamlit as st
 
-API = "http://localhost:8000"
+def _api_url() -> str:
+    """Server address: the API_URL setting when deployed, your own computer otherwise."""
+    url = os.getenv("API_URL")
+    if not url:
+        try:
+            url = st.secrets["API_URL"]
+        except Exception:
+            url = "http://localhost:8000"
+    return url.rstrip("/")
+
+
+API = _api_url()
 st.set_page_config(page_title="Thinking of You", page_icon="💌", layout="centered")
 
 st.markdown("""
@@ -75,7 +87,7 @@ def api(method, path, **kw):
     """Returns (status_code, json). Shows a friendly error if the server is down."""
     headers = {"Authorization": f"Bearer {st.session_state.token}"} if st.session_state.token else {}
     try:
-        r = requests.request(method, API + path, headers=headers, timeout=8, **kw)
+        r = requests.request(method, API + path, headers=headers, timeout=75, **kw)
     except requests.RequestException:
         st.error("Can't reach the server. Is `uvicorn main:app --reload` running?")
         return None, None
@@ -314,6 +326,14 @@ def main_app():
             st.caption("Paste this into the extension so it can add items for you. Keep it private.")
             st.code(st.session_state.token)
 
+
+if not st.session_state.get("awake"):  # free servers sleep when idle; wake it once per visit
+    with st.spinner("Waking up the server. The first visit can take up to a minute…"):
+        try:
+            requests.get(API + "/health", timeout=90)
+            st.session_state.awake = True
+        except requests.RequestException:
+            pass
 
 if st.session_state.token:
     main_app()

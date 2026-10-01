@@ -21,8 +21,20 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field as PField
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
-DB_URL = os.getenv("TOY_DB", "sqlite:///thinking_of_you.db")
-engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
+def _db_url() -> str:
+    """Local SQLite by default; set DATABASE_URL (for example a Neon address) to use Postgres."""
+    url = os.getenv("TOY_DB") or os.getenv("DATABASE_URL") or "sqlite:///thinking_of_you.db"
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url
+
+
+DB_URL = _db_url()
+IS_SQLITE = DB_URL.startswith("sqlite")
+engine = create_engine(DB_URL, pool_pre_ping=True,  # pre_ping: reconnect if the host dropped an idle connection
+                       **({"connect_args": {"check_same_thread": False}} if IS_SQLITE else {}))
 app = FastAPI(title="Thinking of You")
 
 # Only these sites, and only their product pages, are ever tracked.
@@ -82,6 +94,8 @@ SQLModel.metadata.create_all(engine)
 
 def migrate():
     """Adds the new columns to a database created by an earlier version (keeps existing data)."""
+    if not IS_SQLITE:
+        return  # a fresh Postgres database is created with every column already
     with engine.begin() as c:
         for table, col, ddl in [("item", "private", "BOOLEAN DEFAULT 0"), ("user", "consented", "BOOLEAN DEFAULT 0")]:
             cols = [r[1] for r in c.exec_driver_sql(f'PRAGMA table_info("{table}")')]
@@ -248,6 +262,11 @@ def logout(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer), s: S
         s.delete(row)
         s.commit()
     return {"logged_out": True}
+
+
+@app.get("/health")
+def health():
+    return {"ok": True}  # lets the app (and Render) check the server is awake
 
 
 @app.get("/me")

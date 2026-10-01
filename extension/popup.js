@@ -1,4 +1,3 @@
-const API = "http://localhost:8000";
 const $ = (id) => document.getElementById(id);
 
 async function show() {
