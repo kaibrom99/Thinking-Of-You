@@ -1,19 +1,53 @@
 {
   "manifest_version": 3,
   "name": "Thinking of You",
-  "version": "0.2",
-  "description": "Adds products you view or cart on shopping sites to your Thinking of You list.",
-  "permissions": ["storage"],
-  "host_permissions": ["http://localhost:8000/*", "https://*.onrender.com/*"],
-  "background": { "service_worker": "background.js" },
-  "action": { "default_popup": "popup.html", "default_title": "Thinking of You" },
+  "version": "0.3",
+  "description": "Adds products you view or cart on shopping sites to your Thinking of You list, and saves any page you choose.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://*.onrender.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Thinking of You"
+  },
   "content_scripts": [
     {
       "matches": [
-        "https://*.amazon.com/*", "https://*.etsy.com/*", "https://*.target.com/*",
-        "https://*.walmart.com/*", "https://*.shein.com/*", "https://*.ebay.com/*"
+        "https://*.amazon.com/*",
+        "https://*.etsy.com/*",
+        "https://*.target.com/*",
+        "https://*.walmart.com/*",
+        "https://*.ebay.com/*",
+        "https://*.shein.com/*",
+        "https://*.sephora.com/*",
+        "https://*.ulta.com/*",
+        "https://*.lululemon.com/*",
+        "https://*.nike.com/*",
+        "https://*.urbanoutfitters.com/*",
+        "https://*.asos.com/*",
+        "https://*.gymshark.com/*",
+        "https://*.footlocker.com/*",
+        "https://*.gamestop.com/*",
+        "https://*.bestbuy.com/*",
+        "https://*.lego.com/*",
+        "https://*.barnesandnoble.com/*",
+        "https://*.fivebelow.com/*",
+        "https://*.depop.com/*",
+        "https://*.poshmark.com/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "reader.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]

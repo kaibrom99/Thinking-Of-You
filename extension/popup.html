@@ -4,10 +4,11 @@
 <meta charset="utf-8">
 <style>
   [hidden] { display: none !important; }
-  body { width: 290px; margin: 0; padding: 18px; font-family: system-ui, "Segoe UI", sans-serif; color: #1F2340; background: #fff; }
-  h1 { font-size: 20px; margin: 0 0 2px; background: linear-gradient(90deg, #FF6B8B, #7C5CFF);
+  body { width: 300px; margin: 0; padding: 18px; font-family: system-ui, "Segoe UI", sans-serif; color: #1F2340; background: #fff; }
+  .brand { display: flex; align-items: center; gap: 8px; margin: 0 0 2px; }
+  .brand b { font-size: 20px; background: linear-gradient(90deg, #FF6B8B, #7C5CFF);
        -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  p { margin: 0 0 12px; color: #8A8FA3; font-size: 13px; }
+  p { margin: 0 0 12px; color: #6B7089; font-size: 13px; }
   input[type=email], input[type=password] { width: 100%; box-sizing: border-box; padding: 9px 12px; margin-bottom: 8px;
        border: 1px solid #E6E1FF; border-radius: 12px; font-size: 14px; }
   button { padding: 8px 18px; border: 0; border-radius: 999px; font-weight: 600; cursor: pointer; }
@@ -15,12 +16,14 @@
   .ghost { background: #F7F5FF; color: #6142E0; }
   .err { color: #D6336C; font-size: 12px; min-height: 16px; margin-top: 6px; }
   .who { background: #E3F8F5; color: #14907F; padding: 8px 12px; border-radius: 12px; font-size: 13px; margin-bottom: 12px; }
-  label.row { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 14px; }
+  label.row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 10px 0; }
+  .msg { font-size: 12px; min-height: 16px; margin-bottom: 8px; }
+  hr { border: 0; border-top: 1px solid #EEE9FF; margin: 12px 0; }
 </style>
 </head>
 <body>
-  <h1>💌 Thinking of You</h1>
-  <p>Know what they love.</p>
+  <div class="brand"><span style="font-size:20px">🎁</span><b>Thinking of You</b></div>
+  <p>Gifts people actually want.</p>
 
   <div id="login">
     <input id="email" type="email" placeholder="Email">
@@ -31,7 +34,11 @@
 
   <div id="main" hidden>
     <div class="who">✓ Connected as <b id="who"></b></div>
-    <label class="row"><input id="toggle" type="checkbox"> Track my shopping</label>
+    <button id="addPage" class="go">➕ Add this page to my list</button>
+    <label class="row"><input id="priv" type="checkbox"> 🔒 Keep it private</label>
+    <div id="msg" class="msg"></div>
+    <hr>
+    <label class="row"><input id="toggle" type="checkbox"> Track my shopping on supported stores</label>
     <button id="logout" class="ghost">Disconnect</button>
   </div>
   <script src="config.js"></script>

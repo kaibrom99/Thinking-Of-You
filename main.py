@@ -19,7 +19,9 @@ from urllib.parse import urlparse
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field as PField
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, and_, create_engine, or_, select
+
+from catalog import CATEGORIES, guess_category, is_product_url, looks_like_product, product_key, store_name
 
 def _db_url() -> str:
     """Local SQLite by default; set DATABASE_URL (for example a Neon address) to use Postgres."""
@@ -37,15 +39,6 @@ engine = create_engine(DB_URL, pool_pre_ping=True,  # pre_ping: reconnect if the
                        **({"connect_args": {"check_same_thread": False}} if IS_SQLITE else {}))
 app = FastAPI(title="Thinking of You")
 
-# Only these sites, and only their product pages, are ever tracked.
-PRODUCT_PATHS = {
-    "amazon.com": r"/(dp|gp/product)/",
-    "etsy.com": r"/listing/",
-    "target.com": r"/p/",
-    "walmart.com": r"/ip/",
-    "ebay.com": r"/itm/",
-    "shein.com": r"-p-\d+",
-}
 CART_WEIGHT = 3                       # an add-to-cart counts more than a view
 VIEW_COOLDOWN = timedelta(minutes=10)  # page refreshes don't inflate view counts
 TOKEN_DAYS = 30  # a login expires after this long
@@ -77,8 +70,28 @@ class Item(SQLModel, table=True):
     views: int = 0
     carts: int = 0
     hidden: bool = False      # deleted auto items stay hidden so they never come back
-    private: bool = False     # hidden from the partner's view, still visible to the owner
+    private: bool = False     # hidden from everyone you're connected with, still visible to you
+    image_url: str = ""       # product photo address (the picture itself is not stored)
+    category: str = ""        # blank = guessed from the title
+    created_at: Optional[datetime] = None
     last_seen: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class Link(SQLModel, table=True):
+    """A two-way connection between two people. Each side has its own label for the other."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_a: int = Field(index=True)
+    user_b: int = Field(index=True)
+    a_sees_b_as: str = "Friend"
+    b_sees_a_as: str = "Friend"
+
+
+class Invite(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    inviter_id: int = Field(index=True)
+    code: str = Field(index=True)
+    label: str = "Friend"  # what the inviter calls the person they invite
+    expires_at: datetime
 
 
 class LoginToken(SQLModel, table=True):
@@ -93,14 +106,28 @@ SQLModel.metadata.create_all(engine)
 
 
 def migrate():
-    """Adds the new columns to a database created by an earlier version (keeps existing data)."""
-    if not IS_SQLITE:
-        return  # a fresh Postgres database is created with every column already
+    """Upgrades a database made by an earlier version (keeps existing data)."""
+    new_cols = [("item", "image_url", "TEXT DEFAULT ''"), ("item", "category", "TEXT DEFAULT ''"),
+                ("item", "created_at", "TIMESTAMP")]
+    old_cols = [("item", "private", "BOOLEAN DEFAULT 0"), ("user", "consented", "BOOLEAN DEFAULT 0")]
     with engine.begin() as c:
-        for table, col, ddl in [("item", "private", "BOOLEAN DEFAULT 0"), ("user", "consented", "BOOLEAN DEFAULT 0")]:
-            cols = [r[1] for r in c.exec_driver_sql(f'PRAGMA table_info("{table}")')]
-            if col not in cols:
-                c.exec_driver_sql(f'ALTER TABLE "{table}" ADD COLUMN {col} {ddl}')
+        if IS_SQLITE:
+            for table, col, ddl in old_cols + new_cols:
+                cols = [r[1] for r in c.exec_driver_sql(f'PRAGMA table_info("{table}")')]
+                if col not in cols:
+                    c.exec_driver_sql(f'ALTER TABLE "{table}" ADD COLUMN {col} {ddl}')
+        else:  # Postgres (a fresh database already has the older columns)
+            for table, col, ddl in new_cols:
+                c.exec_driver_sql(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS {col} {ddl}')
+    with Session(engine) as s:  # old one-partner pairs become connections
+        paired = s.exec(select(User).where(User.partner_id != None)).all()  # noqa: E711
+        for u in paired:
+            other = s.get(User, u.partner_id)
+            if other and other.partner_id == u.id and u.id < other.id:
+                s.add(Link(user_a=u.id, user_b=other.id, a_sees_b_as="Partner", b_sees_a_as="Partner"))
+            u.partner_id = None
+            s.add(u)
+        s.commit()
 
 
 migrate()
@@ -178,33 +205,13 @@ def clean_url(url: str) -> str:
 
 _track_lock = threading.Lock()  # events are handled one at a time (fine for this single-server draft)
 
-# Each store's product ID, so different-looking links to the same product count as one item
-PRODUCT_ID = [r"/A-(\d+)", r"/(?:dp|gp/product)/([A-Z0-9]{10})", r"/listing/(\d+)",
-              r"/(?:ip|itm)/(?:[^/]+/)?(\d+)", r"-p-(\d+)"]
-
-
-def product_key(url: str) -> str:
-    p = urlparse(url)
-    host = p.netloc.lower().removeprefix("www.")
-    for pattern in PRODUCT_ID:
-        m = re.search(pattern, p.path)
-        if m:
-            return f"{host}:{m.group(1)}"
-    return clean_url(url)
-
-
-def is_product_url(url: str) -> bool:
-    p = urlparse(url)
-    host = p.netloc.lower()
-    for domain, pattern in PRODUCT_PATHS.items():
-        if host == domain or host.endswith("." + domain):
-            return re.search(pattern, p.path) is not None
-    return False
-
-
 def to_dict(i: Item) -> dict:
-    return {"id": i.id, "title": html.unescape(i.title), "description": html.unescape(i.description), "price": i.price,
-            "url": i.url, "source": i.source, "private": i.private, "score": i.views + CART_WEIGHT * i.carts}
+    title, desc = html.unescape(i.title), html.unescape(i.description)
+    return {"id": i.id, "title": title, "description": desc, "price": i.price, "url": i.url,
+            "source": i.source, "private": i.private, "score": i.views + CART_WEIGHT * i.carts,
+            "image_url": i.image_url or "", "store": store_name(i.url),
+            "category": i.category or guess_category(title, desc, i.url),
+            "added": as_utc(i.created_at or i.last_seen).isoformat()}
 
 
 def ranked_items(s: Session, owner_id: int, include_private: bool = True) -> list[dict]:
@@ -222,6 +229,7 @@ class Register(BaseModel):
     email: str = PField(max_length=254, pattern=EMAIL)
     name: str = PField(min_length=1, max_length=50)
     password: str = PField(min_length=8, max_length=128)
+    age_confirmed: bool = False  # must be true: this service is for people 13 and older
 
 
 class Login(BaseModel):
@@ -232,6 +240,8 @@ class Login(BaseModel):
 @app.post("/register")
 def register(body: Register, request: Request, s: Session = Depends(get_session)):
     rate_limit(f"register:{client_ip(request)}", 10, 3600)
+    if not body.age_confirmed:
+        raise HTTPException(400, "You must be 13 or older to sign up.")
     email = body.email.strip().lower()
     if s.exec(select(User).where(User.email == email)).first():
         raise HTTPException(400, "Email already registered")
@@ -270,51 +280,118 @@ def health():
 
 
 @app.get("/me")
-def me(user: User = Depends(current_user), s: Session = Depends(get_session)):
-    partner = s.get(User, user.partner_id) if user.partner_id else None
-    return {"name": user.name, "tracking_on": user.tracking_on, "consented": user.consented,
-            "partner": partner.name if partner else None}
+def me(user: User = Depends(current_user)):
+    return {"id": user.id, "name": user.name, "tracking_on": user.tracking_on, "consented": user.consented}
 
 
-# ---------- Partner linking (both people must opt in) ----------
-@app.post("/partner/invite")
-def invite(user: User = Depends(current_user), s: Session = Depends(get_session)):
-    if user.partner_id:
-        raise HTTPException(400, "Already linked")
-    user.invite_code = secrets.token_hex(3).upper()
-    s.add(user)
+@app.get("/meta")
+def meta():
+    return {"categories": CATEGORIES, "labels": ["Partner", "Parent", "Child", "Friend", "Sibling", "Other"]}
+
+
+# ---------- Connections (any two people can link, and one person can have many) ----------
+INVERSE = {"Parent": "Child", "Child": "Parent"}
+INVITE_DAYS = 7
+
+
+def link_between(s: Session, a: int, b: int) -> Optional[Link]:
+    return s.exec(select(Link).where(or_(and_(Link.user_a == a, Link.user_b == b),
+                                         and_(Link.user_a == b, Link.user_b == a)))).first()
+
+
+class InviteIn(BaseModel):
+    label: str = PField("Friend", min_length=1, max_length=20)  # what you call the person you're inviting
+
+
+@app.post("/invites")
+def create_invite(body: InviteIn, user: User = Depends(current_user), s: Session = Depends(get_session)):
+    rate_limit(f"invite:{user.id}", 20, 3600)
+    invite = Invite(inviter_id=user.id, code=secrets.token_hex(3).upper(), label=body.label.strip(),
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=INVITE_DAYS))
+    s.add(invite)
     s.commit()
-    return {"code": user.invite_code}  # give this code to your partner
+    return {"code": invite.code, "label": invite.label}
+
+
+@app.get("/invites")
+def my_invites(user: User = Depends(current_user), s: Session = Depends(get_session)):
+    now = datetime.now(timezone.utc)
+    rows = s.exec(select(Invite).where(Invite.inviter_id == user.id)).all()
+    return [{"code": i.code, "label": i.label, "expires_at": as_utc(i.expires_at).isoformat()}
+            for i in rows if as_utc(i.expires_at) > now]
 
 
 class Accept(BaseModel):
-    code: str
+    code: str = PField(min_length=1, max_length=20)
 
 
-@app.post("/partner/accept")
-def accept(body: Accept, user: User = Depends(current_user), s: Session = Depends(get_session)):
-    inviter = s.exec(select(User).where(User.invite_code == body.code.upper())).first()
-    if not inviter or inviter.id == user.id or user.partner_id or inviter.partner_id:
-        raise HTTPException(400, "Invalid code or already linked")
-    inviter.partner_id, user.partner_id = user.id, inviter.id
-    inviter.invite_code = user.invite_code = None
-    s.add(inviter)
-    s.add(user)
+@app.post("/invites/accept")
+def accept_invite(body: Accept, user: User = Depends(current_user), s: Session = Depends(get_session)):
+    rate_limit(f"accept:{user.id}", 10, 900)
+    invite = s.exec(select(Invite).where(Invite.code == body.code.strip().upper())).first()
+    inviter = s.get(User, invite.inviter_id) if invite else None
+    if not inviter or inviter.id == user.id or as_utc(invite.expires_at) < datetime.now(timezone.utc):
+        raise HTTPException(400, "Invalid or expired code")
+    if link_between(s, inviter.id, user.id):
+        raise HTTPException(400, "You're already connected")
+    link = Link(user_a=inviter.id, user_b=user.id, a_sees_b_as=invite.label,
+                b_sees_a_as=INVERSE.get(invite.label, invite.label))
+    s.add(link)
+    s.delete(invite)  # codes work once
     s.commit()
-    return {"partner": inviter.name}
+    s.refresh(link)
+    return {"id": link.id, "name": inviter.name, "label": link.b_sees_a_as}
 
 
-@app.delete("/partner")
-def unlink(user: User = Depends(current_user), s: Session = Depends(get_session)):
-    if user.partner_id:
-        partner = s.get(User, user.partner_id)
-        if partner:
-            partner.partner_id = None
-            s.add(partner)
-    user.partner_id = None
-    s.add(user)
+def my_link(s: Session, link_id: int, user: User) -> Link:
+    link = s.get(Link, link_id)
+    if not link or user.id not in (link.user_a, link.user_b):
+        raise HTTPException(404, "Connection not found")
+    return link
+
+
+@app.get("/connections")
+def connections(user: User = Depends(current_user), s: Session = Depends(get_session)):
+    links = s.exec(select(Link).where(or_(Link.user_a == user.id, Link.user_b == user.id))).all()
+    out = []
+    for link in links:
+        mine = link.user_a == user.id
+        other = s.get(User, link.user_b if mine else link.user_a)
+        if other:
+            out.append({"id": link.id, "user_id": other.id, "name": other.name,
+                        "label": link.a_sees_b_as if mine else link.b_sees_a_as,
+                        "item_count": len(ranked_items(s, other.id, include_private=False))})
+    return out
+
+
+class LabelIn(BaseModel):
+    label: str = PField(min_length=1, max_length=20)
+
+
+@app.patch("/connections/{link_id}")
+def relabel(link_id: int, body: LabelIn, user: User = Depends(current_user), s: Session = Depends(get_session)):
+    link = my_link(s, link_id, user)
+    if link.user_a == user.id:
+        link.a_sees_b_as = body.label.strip()
+    else:
+        link.b_sees_a_as = body.label.strip()
+    s.add(link)
     s.commit()
-    return {"unlinked": True}
+    return {"label": body.label.strip()}
+
+
+@app.delete("/connections/{link_id}")
+def disconnect(link_id: int, user: User = Depends(current_user), s: Session = Depends(get_session)):
+    s.delete(my_link(s, link_id, user))
+    s.commit()
+    return {"disconnected": True}
+
+
+@app.get("/people/{user_id}/items")
+def people_items(user_id: int, user: User = Depends(current_user), s: Session = Depends(get_session)):
+    if not link_between(s, user.id, user_id):
+        raise HTTPException(404, "Not connected")
+    return ranked_items(s, user_id, include_private=False)  # live, and never includes private items
 
 
 # ---------- Lists ----------
@@ -323,29 +400,46 @@ def my_items(user: User = Depends(current_user), s: Session = Depends(get_sessio
     return ranked_items(s, user.id)
 
 
-@app.get("/items/partner")
-def partner_items(user: User = Depends(current_user), s: Session = Depends(get_session)):
-    if not user.partner_id:
-        raise HTTPException(404, "No linked partner")
-    return ranked_items(s, user.partner_id, include_private=False)  # live, and never includes private items
-
-
 class NewItem(BaseModel):
     title: str = PField(min_length=1, max_length=500)
     private: bool = False
     description: str = PField("", max_length=5000)
     price: Optional[float] = PField(None, ge=0, le=1_000_000)
     url: str = PField("", max_length=2000, pattern=r"^(https?://.*)?$")  # web links only
+    image_url: str = PField("", max_length=2000, pattern=r"^(https://.*)?$")
+    category: str = PField("", max_length=30)  # blank = guess it
 
 
 @app.post("/items")
 def add_item(body: NewItem, user: User = Depends(current_user), s: Session = Depends(get_session)):
     rate_limit(f"items:{user.id}", 60, 60)
+    if body.category and body.category not in CATEGORIES:
+        raise HTTPException(422, "Unknown category")
     item = Item(owner_id=user.id, source="manual", views=MANUAL_START_SCORE, title=body.title,
-                description=body.description, price=body.price, url=body.url, private=body.private)
+                description=body.description, price=body.price, url=body.url, private=body.private,
+                image_url=body.image_url, created_at=datetime.now(timezone.utc),
+                category=body.category or guess_category(body.title, body.description, body.url))
     s.add(item)
     s.commit()
     s.refresh(item)
+    return to_dict(item)
+
+
+class CategoryIn(BaseModel):
+    category: str
+
+
+@app.patch("/items/{item_id}/category")
+def set_category(item_id: int, body: CategoryIn, user: User = Depends(current_user),
+                 s: Session = Depends(get_session)):
+    item = s.get(Item, item_id)
+    if not item or item.owner_id != user.id:
+        raise HTTPException(404, "Item not found")
+    if body.category not in CATEGORIES:
+        raise HTTPException(422, "Unknown category")
+    item.category = body.category
+    s.add(item)
+    s.commit()
     return to_dict(item)
 
 
@@ -397,11 +491,10 @@ def delete_account(body: Confirm, user: User = Depends(current_user), s: Session
     rate_limit(f"delete:{user.id}", 5, 900)
     if not secrets.compare_digest(user.pw_hash, hash_pw(body.password, user.salt)):
         raise HTTPException(403, "Wrong password")  # 403, not 401, so the app doesn't log you out
-    if user.partner_id:
-        partner = s.get(User, user.partner_id)
-        if partner:
-            partner.partner_id = None
-            s.add(partner)
+    for link in s.exec(select(Link).where(or_(Link.user_a == user.id, Link.user_b == user.id))).all():
+        s.delete(link)
+    for invite in s.exec(select(Invite).where(Invite.inviter_id == user.id)).all():
+        s.delete(invite)
     for item in s.exec(select(Item).where(Item.owner_id == user.id)).all():
         s.delete(item)
     for row in s.exec(select(LoginToken).where(LoginToken.user_id == user.id)).all():
@@ -430,13 +523,14 @@ class Event(BaseModel):
     description: str = PField("", max_length=5000)
     price: Optional[float] = PField(None, ge=0, le=1_000_000)
     event: str = PField("view", pattern="^(view|cart)$")
+    image: str = PField("", max_length=2000, pattern=r"^(https://.*)?$")
 
 
 @app.post("/events")
 def track(e: Event, user: User = Depends(current_user), s: Session = Depends(get_session)):
     """Called by the browser extension. Stores counters per product, not a browsing history."""
     rate_limit(f"events:{user.id}", 120, 60)
-    if not user.consented or not user.tracking_on or not is_product_url(e.url):
+    if not user.consented or not user.tracking_on or not is_product_url(e.url) or not looks_like_product(e.title):
         return {"tracked": False}
     url, now = clean_url(e.url), datetime.now(timezone.utc)
     key = product_key(url)
@@ -446,14 +540,16 @@ def track(e: Event, user: User = Depends(current_user), s: Session = Depends(get
         visible = [i for i in matches if not i.hidden]
         item = visible[0] if visible else (matches[0] if matches else None)
         if item is None:
-            item = Item(owner_id=user.id, title=html.unescape(e.title)[:200], description=html.unescape(e.description)[:500],
-                        price=e.price, url=url)
+            title, desc = html.unescape(e.title)[:200], html.unescape(e.description)[:500]
+            item = Item(owner_id=user.id, title=title, description=desc, price=e.price, url=url,
+                        image_url=e.image, created_at=now, category=guess_category(title, desc, url))
             is_new = True
         elif item.hidden:
             return {"tracked": False}  # user deleted it; respect that
         else:
             is_new = False
             item.price = item.price or e.price
+            item.image_url = e.image or item.image_url
         if e.event == "cart":
             item.carts += 1
         elif is_new or now - as_utc(item.last_seen) > VIEW_COOLDOWN:
