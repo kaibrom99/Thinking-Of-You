@@ -4,3 +4,4 @@ sqlmodel
 streamlit
 requests
 psycopg[binary]
+pillow
