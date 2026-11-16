@@ -1,4 +1,6 @@
 import itertools
+import base64
+import io
 import os
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -9,6 +11,7 @@ os.environ["TOY_DB"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(), "test.db"
 import main  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlmodel import Session, select  # noqa: E402
+from PIL import Image  # noqa: E402
 
 client = TestClient(main.app)
 _n = itertools.count()
@@ -125,6 +128,89 @@ def test_views_cooldown_and_cart_weight():
     assert mine(u)[0]["score"] == 4
 
 
+def test_view_cooldown_uses_last_counted_view_not_last_event():
+    u = tracker()
+    event(u)
+    with Session(main.engine) as s:
+        item = s.exec(select(main.Item).where(main.Item.owner_id == uid(u))).first()
+        item.last_view_counted_at = datetime.now(timezone.utc) - timedelta(minutes=11)
+        item.last_seen = datetime.now(timezone.utc)
+        s.add(item)
+        s.commit()
+    event(u)
+    assert mine(u)[0]["score"] == 2
+
+
+def test_owner_can_adjust_priority_points():
+    owner, other = signup(), signup()
+    link(owner, other)
+    first = client.post("/items", headers=owner["h"], json={"title": "Book"}).json()
+    item = client.post("/items", headers=owner["h"], json={"title": "Lamp"}).json()
+    path = f"/items/{item['id']}/score-adjustment"
+    assert [i["id"] for i in mine(owner)] == [first["id"], item["id"]]
+    changed = client.post(path, headers=owner["h"], json={"delta": 8})
+    assert changed.status_code == 200 and changed.json()["score"] == 13
+    assert mine(owner)[0]["id"] == item["id"]
+    assert seen_by(other, owner).json()[0]["id"] == item["id"]
+    assert client.post(path, headers=other["h"], json={"delta": -2}).status_code == 404
+    assert client.post(path, json={"delta": 1}).status_code == 401
+    assert client.post(path, headers=owner["h"], json={"delta": -9}).json()["score"] == 4
+    assert mine(owner)[-1]["id"] == item["id"]
+    assert seen_by(other, owner).json()[-1]["score"] == 4
+    assert client.post(path, headers=owner["h"], json={"delta": -100}).json()["score"] == 0
+    assert client.post(path, headers=owner["h"], json={"delta": 1}).json()["score"] == 1
+
+
+def test_gift_claim_and_purchased_status_are_hidden_from_list_owner():
+    owner, gifter, other = signup("Owner"), signup("Gifter"), signup("Other")
+    link(owner, gifter)
+    link(owner, other)
+    item = client.post("/items", headers=owner["h"], json={"title": "Book"}).json()
+    claim_path = f"/people/{uid(owner)}/items/{item['id']}/claim"
+    assert client.post(claim_path, headers=gifter["h"]).status_code == 200
+    owner_items = mine(owner)
+    assert "gift_status" not in owner_items[0]
+    shared = seen_by(other, owner).json()[0]
+    assert shared["gift_status"] == "claimed" and not shared["claimed_by_me"]
+    assert client.post(claim_path, headers=other["h"]).status_code == 409
+    assert client.patch(claim_path, headers=gifter["h"], json={"purchased": True}).json()["gift_status"] == "purchased"
+    assert seen_by(other, owner).json()[0]["gift_status"] == "purchased"
+    assert client.delete(claim_path, headers=gifter["h"]).status_code == 200
+    assert seen_by(other, owner).json()[0]["gift_status"] == "available"
+
+
+def test_curator_sublists_are_not_visible_to_the_list_owner():
+    owner, curator = signup("Owner"), signup("Curator")
+    link(owner, curator)
+    item = client.post("/items", headers=owner["h"], json={"title": "Mug"}).json()
+    base = f"/people/{uid(owner)}/sublists"
+    created = client.post(base, headers=curator["h"], json={"title": "Small spontaneous gifts"})
+    assert created.status_code == 200
+    sublist_id = created.json()["id"]
+    assert client.post(f"/sublists/{sublist_id}/items", headers=curator["h"], json={"item_id": item["id"]}).status_code == 200
+    assert len(client.get(base, headers=curator["h"]).json()[0]["items"]) == 1
+    assert client.get(f"/people/{uid(curator)}/sublists", headers=owner["h"]).json() == []
+
+
+def test_profile_photo_can_be_added_at_signup_edited_and_seen_by_connections():
+    buf = io.BytesIO()
+    Image.new("RGB", (300, 180), "purple").save(buf, format="PNG")
+    encoded = base64.b64encode(buf.getvalue()).decode("ascii")
+    email = f"photo{next(_n)}@test.com"
+    created = client.post("/register", json={"email": email, "name": "Photo User", "password": "pass1234",
+                                             "age_confirmed": True, "profile_photo": encoded})
+    assert created.status_code == 200
+    user = {"email": email, "pw": "pass1234", "h": {"Authorization": "Bearer " + created.json()["token"]}}
+    friend = signup("Friend")
+    link(user, friend)
+    photo = client.get("/me", headers=user["h"]).json()["profile_photo"]
+    assert photo and base64.b64decode(photo).startswith(b"\xff\xd8")
+    assert client.get("/connections", headers=friend["h"]).json()[0]["profile_photo"] == photo
+    assert client.put("/profile/photo", headers=user["h"], json={"photo": "not-an-image"}).status_code == 422
+    assert client.delete("/profile/photo", headers=user["h"]).json()["profile_photo"] == ""
+    assert client.get("/connections", headers=friend["h"]).json()[0]["profile_photo"] == ""
+
+
 def test_non_product_pages_are_ignored():
     u = tracker()
     assert event(u, url="https://www.target.com/").json() == {"tracked": False}
@@ -177,6 +263,7 @@ def test_strangers_cannot_see_lists():
 def test_invite_codes_work_once():
     a, b, c = signup(), signup(), signup()
     code = client.post("/invites", headers=a["h"], json={"label": "Friend"}).json()["code"]
+    assert len(code) == 24
     assert client.post("/invites/accept", json={"code": code}, headers=b["h"]).status_code == 200
     assert client.post("/invites/accept", json={"code": code}, headers=c["h"]).status_code == 400
 

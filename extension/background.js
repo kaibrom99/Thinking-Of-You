@@ -5,9 +5,9 @@ const log = (...a) => console.log("[Thinking of You]", ...a);
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type !== "track") return;
-  chrome.storage.local.get(["token", "enabled"]).then(async ({ token, enabled }) => {
-    if (!token || enabled === false) {
-      log("not signed in, or tracking is paused in the popup");
+  chrome.storage.local.get(["token"]).then(async ({ token }) => {
+    if (!token) {
+      log("not signed in");
       return reply({ ok: false });
     }
     try {

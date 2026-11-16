@@ -1,0 +1,99 @@
+/* Layout for phones and small tablets. Desktop colors and spacing live in App.py. */
+.stApp [data-testid="stColumn"],
+.stApp [data-testid="stVerticalBlock"],
+.stApp [data-testid="stElementContainer"] { min-width: 0; }
+.stApp [data-testid="stMarkdownContainer"] { overflow-wrap: anywhere; }
+.stApp .st-key-app_header .brand { flex-wrap: wrap; }
+.stApp .st-key-app_header .tagline { margin-bottom: 0; }
+.stApp .pname { overflow-wrap: anywhere; line-height: 1.5; }
+
+@media (max-width: 640px) {
+  .stApp .block-container {
+    padding: 1.1rem 1rem max(2rem, env(safe-area-inset-bottom));
+  }
+  .stApp [data-testid="stVerticalBlock"] { gap: .85rem; }
+  .stApp h2 { font-size: 1.4rem; line-height: 1.35; }
+  .stApp h3 { font-size: 1.2rem; line-height: 1.4; padding-top: .75rem; }
+  .stApp p, .stApp label { line-height: 1.6; }
+  .stApp [data-testid="stCaptionContainer"] p { font-size: .79rem; line-height: 1.7; }
+  .stApp .brand { gap: 8px; }
+  .stApp .logo { font-size: 1.5rem; }
+  .stApp .name { font-size: clamp(1.3rem, 5.7vw, 1.6rem); letter-spacing: -.6px; }
+  .stApp .tagline { font-size: .82rem; margin-top: 6px; }
+  .stApp .st-key-app_header .logo { font-size: 1.2rem; }
+  .stApp .st-key-app_header .name { font-size: clamp(.95rem, 4.2vw, 1.2rem); }
+  .stApp .st-key-app_header .brand { gap: 5px; flex-wrap: nowrap; }
+  .stApp .st-key-app_header .tagline { font-size: .73rem; }
+  .stApp .st-key-app_header button { padding: 6px 10px; }
+  .stApp .st-key-app_header button p { white-space: nowrap; font-size: .74rem; }
+
+  /* Navigation stays visible as four equally sized buttons instead of overflowing. */
+  .st-key-app_navigation [data-baseweb="tab-list"] {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    height: auto; gap: 7px; overflow: visible; padding: 2px 0;
+  }
+  .st-key-app_navigation [data-baseweb="tab"] {
+    width: 100%; min-height: 44px; justify-content: center; padding: 8px 10px;
+    background: #FAF8FE; border: 1px solid #F0EBFA; border-radius: 13px;
+  }
+  .st-key-app_navigation [data-baseweb="tab"] p { font-size: .8rem; }
+  .st-key-app_navigation [aria-selected="true"] {
+    background: #FFF0F5; border-color: #F5C6D5; color: #C64274;
+  }
+  .st-key-app_navigation [data-baseweb="tab-highlight"],
+  .st-key-app_navigation [data-baseweb="tab-border"] { display: none; }
+  .stApp .stTabs [role="tabpanel"] { padding-top: .8rem; }
+
+  /* Full-width search, then sort and filters alongside each other. */
+  [class*="st-key-list_tools_"] [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(3)) {
+    display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 8px;
+  }
+  [class*="st-key-list_tools_"] [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(3)) > [data-testid="stColumn"] {
+    width: 100% !important; min-width: 0 !important;
+  }
+  [class*="st-key-list_tools_"] [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(3)) > [data-testid="stColumn"]:first-child {
+    grid-column: 1 / -1;
+  }
+  [class*="st-key-list_tools_"] [data-testid="stPopover"] button { width: 100%; }
+
+  .stApp .thumb { width: 68px; height: 76px; flex-basis: 68px; border-radius: 12px; font-size: 1.6rem; }
+  .stApp .ttl { font-size: .91rem; line-height: 1.5; }
+  .stApp .price { font-size: .97rem; margin: 4px 0; }
+  .stApp .desc { font-size: .76rem; line-height: 1.6; }
+  .stApp .chip { display: inline-flex; align-items: center; min-height: 28px; padding: 3px 8px;
+    font-size: .68rem; white-space: normal; max-width: 100%; }
+  .stApp [class*="st-key-item_tags_"] { gap: 5px; }
+  .stApp [class*="st-key-item_tags_"] [data-testid="stPopover"] button { min-height: 36px; padding: 4px 10px; }
+  .stApp [class*="st-key-item_tags_"] [data-testid="stPopover"] button p { font-size: .76rem; }
+  .stApp [class*="st-key-item_card_"] [data-testid="stHorizontalBlock"] { row-gap: .75rem; }
+  .stApp a.buy { display: flex; justify-content: center; align-items: center; min-height: 44px;
+    padding: 8px 16px; width: 100%; box-sizing: border-box; }
+  /* Keep connected people in a compact row of three, with names allowed to wrap. */
+  .st-key-people_grid [data-testid="stHorizontalBlock"] { flex-wrap: nowrap; gap: 8px; }
+  .st-key-people_grid [data-testid="stColumn"] { min-width: 0 !important; width: calc((100% - 16px) / 3) !important;
+    flex: 1 1 0 !important; }
+  .st-key-people_grid .person { padding: 10px 4px; }
+  .st-key-people_grid .avatar { width: 58px; height: 58px; }
+  .st-key-people_grid .pname { font-size: .76rem; }
+  .st-key-people_grid .pcount { font-size: .68rem; margin-top: 6px; }
+  .st-key-people_grid .chip { font-size: .63rem; padding: 2px 6px; }
+  .st-key-people_grid button { padding: 6px; }
+  .st-key-people_grid button p { font-size: .73rem; }
+
+  /* Readable fields prevent Safari from zooming the page when a field is focused. */
+  .stApp input, .stApp textarea, .stApp [data-baseweb="select"] input {
+    font-size: 16px !important;
+  }
+  .stApp [data-baseweb="input"], .stApp [data-baseweb="select"] > div { min-height: 44px; }
+  .stApp button { min-height: 44px; }
+  .stApp button p { line-height: 1.4; }
+  .stApp [data-testid="stForm"] { padding: 16px; border-radius: 16px; }
+  .stApp [data-testid="stExpander"] summary { min-height: 48px; align-items: center; }
+  .stApp [data-testid="stExpander"] summary p { font-size: .82rem; }
+  .stApp [data-testid="stFileUploader"] section { padding: 12px; }
+  .stApp [data-testid="stFileUploader"] section small { font-size: .73rem; }
+  .stApp .profile-preview { width: 96px; height: 96px; }
+  .stApp [class*="st-key-saved_gift_"] { gap: 10px; }
+  .stApp [class*="st-key-saved_gift_"] button { white-space: nowrap; padding: 6px 12px; }
+  [data-testid="stPopoverBody"] { max-width: calc(100vw - 24px) !important; box-sizing: border-box; }
+}
