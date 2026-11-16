@@ -7,7 +7,7 @@ STYLE = """
 <style>
 .stApp:has(.welcome-root) { background: #FFFCFA; }
 .stApp:has(.welcome-root) .block-container { max-width: 1120px; padding-top: 1.7rem; padding-bottom: 1rem; }
-.st-key-welcome_nav { padding-bottom: 18px; border-bottom: 1px solid #EEE7EC; }
+.st-key-welcome_nav { padding-bottom: 18px; border-bottom: 1px solid #EEE7EC; justify-content: space-between; }
 .welcome-wordmark { display: flex; align-items: center; gap: 10px; color: #302943;
   font-size: 1.2rem; font-weight: 600; letter-spacing: -.6px; }
 .welcome-mark { display: inline-flex; width: 42px; height: 42px; align-items: center;
@@ -17,7 +17,7 @@ STYLE = """
 .welcome-title { font-size: clamp(2.8rem, 5vw, 3.8rem) !important; color: #302943 !important;
   font-weight: 600 !important; letter-spacing: -2.8px !important; line-height: 1.12 !important;
   padding: 0 !important; margin: 0 0 22px !important; }
-.welcome-title span { background: linear-gradient(100deg, #F07897 5%, #956CE7 94%);
+.welcome-title .welcome-accent { background: linear-gradient(100deg, #F07897 5%, #956CE7 94%);
   background-clip: text; -webkit-background-clip: text; color: transparent; }
 .welcome-description { max-width: 435px; font-size: .97rem; line-height: 1.9; color: #797181; margin: 0 0 22px; }
 .st-key-welcome_actions { margin-top: 2px; }
@@ -112,11 +112,15 @@ STYLE = """
   .welcome-footer { align-items: flex-start; flex-direction: column; gap: 8px; padding-top: 16px;
     font-size: .74rem; line-height: 1.8; color: #84718F; }
 }
-@media (min-width: 641px) and (max-width: 860px) {
-  .st-key-welcome_hero [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(2)) {
-    flex-wrap: wrap;
+@media (max-width: 860px) {
+  .st-key-welcome_hero [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important; align-items: stretch !important;
   }
-  .st-key-welcome_hero [data-testid="stColumn"] { min-width: 100% !important; }
+  .st-key-welcome_hero [data-testid="stColumn"] {
+    width: 100% !important; min-width: 100% !important; flex: 1 1 auto !important;
+  }
+  .st-key-welcome_actions button { width: 100%; white-space: normal; }
+  .st-key-welcome_actions button p { overflow: visible; text-overflow: clip; white-space: normal; }
   .welcome-description { max-width: 550px; }
   .welcome-scene { margin-top: 14px; }
 }
@@ -174,7 +178,7 @@ def welcome_screen():
         words, scene = st.columns([1.08, 1], gap="large", vertical_alignment="center")
         with words:
             st.markdown('''<div class="welcome-eyebrow">FOR YOUR FAVORITE PEOPLE</div>
-<h1 class="welcome-title">A little hint.<br><span>A lot of love.</span></h1>
+<h1 class="welcome-title">A little hint.<br><span class="welcome-accent">A lot of love.</span></h1>
 <p class="welcome-description">Keep the things you love in one place. Connect with your favorite people, discover what’s on their minds, and turn everyday hints into thoughtful gifts.</p>''', unsafe_allow_html=True)
             with st.container(key="welcome_actions"):
                 create, signin = st.columns([1.6, 1], gap="small")

@@ -1,10 +1,39 @@
-/* Layout for phones and small tablets. Desktop colors and spacing live in App.py. */
-.stApp [data-testid="stColumn"],
-.stApp [data-testid="stVerticalBlock"],
-.stApp [data-testid="stElementContainer"] { min-width: 0; }
-.stApp [data-testid="stMarkdownContainer"] { overflow-wrap: anywhere; }
-.stApp .st-key-app_header .brand { flex-wrap: wrap; }
-.stApp .st-key-app_header .tagline { margin-bottom: 0; }
+/* Keep the fixed light design consistent with device and saved browser themes.
+   Do not reset stColumn min-width: Streamlit uses it to stack columns on phones. */
+:root { color-scheme: light; }
+.stApp { color-scheme: light; }
+:is(.stApp, [data-st-overlay-root]) :is(h1, h2, h3, h4, label) { color: #1F2340; }
+:is(.stApp, [data-st-overlay-root]) :is([data-baseweb="input"], [data-baseweb="base-input"],
+  [data-baseweb="textarea"], [data-baseweb="select"] > div) {
+  background-color: #F7F5FF !important; color: #1F2340 !important; border-color: #E6E1FF !important;
+}
+:is(.stApp, [data-st-overlay-root]) :is(input, textarea) {
+  color: #1F2340 !important; -webkit-text-fill-color: #1F2340 !important;
+  background-color: #F7F5FF !important; caret-color: #7C5CFF; color-scheme: light;
+}
+:is(.stApp, [data-st-overlay-root]) :is(input, textarea)::placeholder {
+  color: #747991 !important; -webkit-text-fill-color: #747991 !important; opacity: 1;
+}
+:is(.stApp, [data-st-overlay-root]) [data-baseweb="select"] :is([role="combobox"], svg) {
+  color: #1F2340 !important;
+}
+:is(.stApp, [data-st-overlay-root]) [data-testid="stNumberInput"] button {
+  background-color: #F0ECFA !important; color: #555B73 !important;
+}
+[data-baseweb="popover"] [role="listbox"], [data-st-overlay-root] {
+  background-color: #FFFFFF !important; color: #1F2340 !important; color-scheme: light;
+}
+[data-baseweb="popover"] [role="option"] { color: #1F2340; background-color: #FFFFFF; }
+[data-baseweb="popover"] [role="option"]:hover { background-color: #F7F5FF; }
+.stApp [data-testid="stCaptionContainer"] { color: #6B7089; }
+.stApp button[kind="secondary"], .stApp button[kind="tertiary"] { color: #1F2340; }
+.stApp button:disabled { color: #85899F !important; background-color: #F5F4F9 !important; }
+.stApp [data-testid="stFileUploader"] section { background: #F7F5FF; color: #1F2340; }
+.stApp [data-testid="stMarkdownContainer"] { overflow-wrap: break-word; }
+.stApp .st-key-app_header .brand { min-width: 0; padding: 3px 0; }
+.stApp .st-key-app_header .name { line-height: 1.35; }
+.stApp .st-key-app_header .tagline { margin: 6px 0 0; line-height: 1.6; }
+.st-key-app_header { gap: 6px !important; }
 .stApp .pname { overflow-wrap: anywhere; line-height: 1.5; }
 
 @media (max-width: 640px) {
@@ -20,28 +49,29 @@
   .stApp .logo { font-size: 1.5rem; }
   .stApp .name { font-size: clamp(1.3rem, 5.7vw, 1.6rem); letter-spacing: -.6px; }
   .stApp .tagline { font-size: .82rem; margin-top: 6px; }
-  .stApp .st-key-app_header .logo { font-size: 1.2rem; }
-  .stApp .st-key-app_header .name { font-size: clamp(.95rem, 4.2vw, 1.2rem); }
-  .stApp .st-key-app_header .brand { gap: 5px; flex-wrap: nowrap; }
-  .stApp .st-key-app_header .tagline { font-size: .73rem; }
-  .stApp .st-key-app_header button { padding: 6px 10px; }
-  .stApp .st-key-app_header button p { white-space: nowrap; font-size: .74rem; }
+  .stApp .st-key-app_header .logo { font-size: 1.6rem; flex: 0 0 auto; }
+  .stApp .st-key-app_header .name { font-size: clamp(1.25rem, 5.5vw, 1.6rem); }
+  .stApp .st-key-app_header .brand { gap: 8px; }
+  .stApp .st-key-app_header .tagline { font-size: .83rem; }
+  .stApp .st-key-app_header_actions button { padding: 8px 16px; }
+  .stApp .st-key-app_header_actions button p { white-space: nowrap; font-size: .8rem; }
 
   /* Navigation stays visible as four equally sized buttons instead of overflowing. */
-  .st-key-app_navigation [data-baseweb="tab-list"] {
+  .st-key-app_navigation [role="tablist"] {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-    height: auto; gap: 7px; overflow: visible; padding: 2px 0;
+    height: auto; gap: 7px; overflow: visible; padding: 2px 0; width: 100%;
   }
-  .st-key-app_navigation [data-baseweb="tab"] {
-    width: 100%; min-height: 44px; justify-content: center; padding: 8px 10px;
+  .st-key-app_navigation [role="tab"] {
+    width: 100%; min-width: 0; min-height: 46px; height: auto; justify-content: center; padding: 8px 10px;
     background: #FAF8FE; border: 1px solid #F0EBFA; border-radius: 13px;
+    box-sizing: border-box; color: #555B73;
   }
-  .st-key-app_navigation [data-baseweb="tab"] p { font-size: .8rem; }
+  .st-key-app_navigation [role="tab"] p { font-size: .8rem; }
   .st-key-app_navigation [aria-selected="true"] {
     background: #FFF0F5; border-color: #F5C6D5; color: #C64274;
   }
-  .st-key-app_navigation [data-baseweb="tab-highlight"],
-  .st-key-app_navigation [data-baseweb="tab-border"] { display: none; }
+  .st-key-app_navigation [role="tablist"]::after,
+  .st-key-app_navigation .react-aria-SelectionIndicator { display: none; }
   .stApp .stTabs [role="tabpanel"] { padding-top: .8rem; }
 
   /* Full-width search, then sort and filters alongside each other. */

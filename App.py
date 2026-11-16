@@ -55,8 +55,8 @@ html, body, .stApp, button, input, textarea { font-family: 'Poppins', sans-serif
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 .tagline { color: #6B7089; margin: 2px 0 1rem 0; }
 
-.stTabs [data-baseweb="tab-list"] { gap: 6px; }
-.stTabs [data-baseweb="tab"] { border-radius: 999px; padding: 6px 16px; font-weight: 500; }
+.stTabs [role="tablist"] { gap: 6px; }
+.stTabs [role="tab"] { border-radius: 999px; padding: 6px 16px; font-weight: 500; color: #555B73; }
 .stTabs [aria-selected="true"] { color: #FF6B8B; }
 .stTabs [data-baseweb="tab-highlight"] { background: #FF6B8B; }
 button[kind="primary"], button[kind="primaryFormSubmit"] { background: linear-gradient(90deg, #FF6B8B, #7C5CFF);
@@ -582,12 +582,12 @@ def main_app():
     if not me["consented"] and not st.session_state.get("skip_consent"):
         consent_screen(me["name"])
         return
-    with st.container(horizontal=True, wrap=False, vertical_alignment="center", gap="small", key="app_header"):
-        with st.container():
-            brand(f"Hi {html.escape(me['name'])} 👋")
-        st.button("🔄", help="Refresh", key="header_refresh")  # any button click re-runs the page
-        if st.button("Log out", key="header_logout"):
-            logout()
+    with st.container(key="app_header"):
+        brand(f"Hi {html.escape(me['name'])} 👋")
+        with st.container(horizontal=True, horizontal_alignment="right", gap="small", key="app_header_actions"):
+            st.button("🔄", help="Refresh", key="header_refresh")  # any button click re-runs the page
+            if st.button("Log out", key="header_logout"):
+                logout()
 
     with st.container(key="app_navigation"):
         t_people, t_mine, t_add, t_set = st.tabs(["🏠 People", "🛍️ My list", "➕ Add item", "⚙️ Settings"])
