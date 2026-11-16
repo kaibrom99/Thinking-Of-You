@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 sqlmodel
-streamlit
+streamlit==1.64.0
 requests
 psycopg[binary]
 pillow

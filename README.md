@@ -6,7 +6,10 @@ It helps partners find thoughtful gifts without requiring someone to explicitly 
 
 ## Features
 
+- A welcome page for signed-out visitors with account creation and sign-in links
+- Responsive phone layouts for navigation, wishlists, forms, and the welcome page
 - Account registration and login
+- Profile photos with adjustable square crop, shown to connected people
 - Partner linking through invite codes
 - Automatically generated gift lists
 - Manually added wishlist items
@@ -16,6 +19,10 @@ It helps partners find thoughtful gifts without requiring someone to explicitly 
 - Tracking consent and pause controls
 - Account and data deletion
 - Product deduplication
+- Secret gift claims and purchased status for connected gift-givers
+- Private curator-made gift sublists for another person's wishlist
+- Manual priority score adjustments
+- Product-link previews for quick saving on phones
 - Automated API tests
 
 ## Supported Shopping Sites
@@ -37,7 +44,7 @@ The extension ignores pages that do not match recognized product-page patterns.
 2. Link your account with your partner using an invite code.
 3. Choose whether to enable shopping activity tracking.
 4. Install the browser extension and sign in.
-5. Browse supported shopping websites normally.
+5. Browse supported shopping websites normally, or paste a product link into Quick add on a phone.
 6. Recognized products are added to your list.
 7. Your linked partner can see your non-private gift ideas.
 
@@ -53,12 +60,18 @@ Items are ranked using product activity:
 
 Repeated views within the view cooldown period do not increase the score.
 
+In **My list**, click the **🔥 score** next to an item's store, enter the number of points,
+and choose **Add** or **Subtract**. Only the list owner can adjust its score, and
+scores stop at zero. Choose **Most wanted** sorting to show higher scores first;
+connected people see the updated score and priority too.
+
 ## Privacy
 
 Thinking of You is designed around user consent and control.
 
 - Shopping tracking requires user consent.
 - Tracking can be paused.
+- Profile photos are shared with connected people and can be changed or removed in settings.
 - Only supported product pages are processed.
 - General browsing history is not shared with a partner.
 - Items can be marked private.
@@ -127,7 +140,9 @@ Thinking-Of-You/
 
 ### Main Application Files
 
-- `App.py` contains the Streamlit user interface. It provides account registration, login, partner linking, wishlist management, privacy settings, consent controls, and account deletion.
+- `App.py` contains the Streamlit user interface. It provides account registration, login, connection management, wishlist management, secret gift claims, private gift sublists, privacy settings, and account deletion.
+- `welcome.py` contains the public introduction page and its responsive illustrations and account navigation.
+- `mobile.css` contains the shared phone layout, spacing, and touch controls.
 - `main.py` contains the FastAPI backend, database models, authentication system, partner-linking logic, item-management endpoints, and browser-extension event processing.
 - `requirements.txt` contains the dependencies needed to run the application.
 - `requirements-dev.txt` contains the dependencies used for development and automated testing.

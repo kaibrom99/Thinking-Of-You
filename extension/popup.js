@@ -2,12 +2,61 @@ const $ = (id) => document.getElementById(id);
 const say = (text, ok = false) => { $("msg").textContent = text; $("msg").style.color = ok ? "#14907F" : "#D6336C"; };
 
 async function show() {
-  const { token, name, enabled } = await chrome.storage.local.get(["token", "name", "enabled"]);
+  const { token, name } = await chrome.storage.local.get(["token", "name"]);
   $("login").hidden = !!token;
   $("main").hidden = !token;
   if (token) {
     $("who").textContent = name || "you";
-    $("toggle").checked = enabled !== false;
+    $("toggle").disabled = true;
+    try {
+      const r = await fetch(API + "/me", { headers: { Authorization: "Bearer " + token } });
+      if (r.status === 401) {
+        await chrome.storage.local.remove(["token", "name"]);
+        return show();
+      }
+      const me = await r.json();
+      if (!r.ok) throw new Error(me.detail || "Couldn't read tracking status");
+      $("toggle").checked = !!me.consented && !!me.tracking_on;
+      $("trackingStatus").textContent = !me.consented ? "Tracking off · consent needed" :
+        (me.tracking_on ? "Tracking is on" : "Tracking is paused");
+      $("trackingHelp").textContent = "This switch stays in sync with Privacy settings in the app.";
+      $("toggle").disabled = false;
+    } catch (e) {
+      $("trackingStatus").textContent = "Tracking status unavailable";
+      $("trackingHelp").textContent = e.message || "Reconnect to check the shared setting.";
+    }
+  }
+}
+
+async function updateTracking(enabled) {
+  const { token } = await chrome.storage.local.get("token");
+  const toggle = $("toggle");
+  toggle.disabled = true;
+  const request = async (path, method, body) => {
+    const r = await fetch(API + path, { method, headers: {
+      Authorization: "Bearer " + token,
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+    }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || "Couldn't update tracking");
+    return data;
+  };
+  try {
+    const meResponse = await fetch(API + "/me", { headers: { Authorization: "Bearer " + token } });
+    const me = await meResponse.json().catch(() => ({}));
+    if (meResponse.status === 401) {
+      await chrome.storage.local.remove(["token", "name"]);
+      return show();
+    }
+    if (!meResponse.ok) throw new Error(me.detail || "Couldn't read tracking status");
+    if (enabled && !me.consented) await request("/consent", "POST");
+    await request("/tracking", "PATCH", { on: enabled });
+    await show();
+  } catch (e) {
+    say(e.message || "Couldn't update tracking");
+    await show();
+  } finally {
+    toggle.disabled = false;
   }
 }
 
@@ -21,7 +70,7 @@ $("loginBtn").onclick = async () => {
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.detail || "Sign-in failed");
-    await chrome.storage.local.set({ token: data.token, name: data.name, enabled: true });
+    await chrome.storage.local.set({ token: data.token, name: data.name });
     $("pw").value = "";
     show();
   } catch (e) {
@@ -62,7 +111,7 @@ $("addPage").onclick = async () => {
   }
 };
 
-$("toggle").onchange = (e) => chrome.storage.local.set({ enabled: e.target.checked });
+$("toggle").onchange = (e) => updateTracking(e.target.checked);
 $("logout").onclick = async () => {
   const { token } = await chrome.storage.local.get("token");
   if (token) fetch(API + "/logout", { method: "POST", headers: { Authorization: "Bearer " + token } }).catch(() => {});

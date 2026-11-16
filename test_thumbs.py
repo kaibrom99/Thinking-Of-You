@@ -45,3 +45,14 @@ def test_non_images_are_rejected(monkeypatch):
 def test_private_addresses_are_blocked():
     assert thumbs._public_host("localhost") is False
     assert thumbs._public_host("127.0.0.1") is False
+
+
+def test_page_preview_extracts_open_graph_metadata(monkeypatch):
+    page = b'''<html><head><meta property="og:title" content="Soft Wool Scarf">
+    <meta property="og:description" content="Warm and cozy">
+    <meta property="og:image" content="/images/scarf.jpg">
+    <meta property="product:price:amount" content="48.50"></head></html>'''
+    monkeypatch.setattr(thumbs, "_get", lambda url, headers, max_bytes=8_000_000: FakeResponse(page, "text/html"))
+    data = thumbs.page_metadata("https://shop.example.com/products/scarf")
+    assert data == {"title": "Soft Wool Scarf", "description": "Warm and cozy",
+                    "image_url": "https://shop.example.com/images/scarf.jpg", "price": 48.5}

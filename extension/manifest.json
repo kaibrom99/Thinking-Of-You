@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Thinking of You",
-  "version": "0.3",
+  "version": "0.4",
   "description": "Adds products you view or cart on shopping sites to your Thinking of You list, and saves any page you choose.",
   "permissions": [
     "storage",
